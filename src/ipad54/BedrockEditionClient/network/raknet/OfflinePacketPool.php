@@ -1,8 +1,10 @@
 <?php
+declare(strict_types=1);
 
 namespace ipad54\BedrockEditionClient\network\raknet;
 
 use pocketmine\utils\SingletonTrait;
+use raklib\protocol\IncompatibleProtocolVersion;
 use raklib\protocol\OfflineMessage;
 use raklib\protocol\OpenConnectionReply1;
 use raklib\protocol\OpenConnectionReply2;
@@ -21,6 +23,7 @@ final class OfflinePacketPool{
 		$this->registerPacket(UnconnectedPingOpenConnections::$ID, UnconnectedPingOpenConnections::class);
 		$this->registerPacket(OpenConnectionReply1::$ID, OpenConnectionReply1::class);
 		$this->registerPacket(OpenConnectionReply2::$ID, OpenConnectionReply2::class);
+		$this->registerPacket(IncompatibleProtocolVersion::$ID, IncompatibleProtocolVersion::class);
 	}
 
 	private function registerPacket(int $id, string $class) : void{

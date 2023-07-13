@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 
 namespace ipad54\BedrockEditionClient\network;
 
@@ -10,7 +11,6 @@ use ipad54\BedrockEditionClient\player\Player;
 use ipad54\BedrockEditionClient\utils\KeyPair;
 use ipad54\BedrockEditionClient\utils\Utils;
 use pocketmine\network\mcpe\compression\Compressor;
-use pocketmine\network\mcpe\compression\ZlibCompressor;
 use pocketmine\network\mcpe\encryption\EncryptionContext;
 use pocketmine\network\mcpe\encryption\EncryptionUtils;
 use pocketmine\network\mcpe\handler\PacketHandler;
@@ -38,7 +38,7 @@ class NetworkSession{
 	private Client $client;
 
 	private RakNetConnection $connection;
-	private Compressor $compressor;
+	private ?Compressor $compressor = null;
 
 	private ?EncryptionContext $cipher = null;
 
@@ -63,7 +63,6 @@ class NetworkSession{
 
 		$this->logger = $client->getLogger();
 
-		$this->compressor = ZlibCompressor::getInstance();
 		$this->packetPool = PacketPool::getInstance();
 		$this->serializerContext = new PacketSerializerContext(Utils::makeItemTypeDictionary());
 	}
@@ -156,7 +155,7 @@ class NetworkSession{
 			$payload = $this->cipher->decrypt($payload);
 		}
 
-		$stream = new PacketBatch($this->compressor->decompress($payload));
+		$stream = new PacketBatch($this->compressor?->decompress($payload) ?? $payload);
 		foreach($stream->getPackets($this->packetPool, $this->serializerContext, 500) as [$packet, $buffer]){
 			if($packet !== null){
 				$this->handleDataPacket($packet, $buffer);
@@ -169,7 +168,12 @@ class NetworkSession{
 			throw new PacketHandlingException("Unexpected non-clientbound packet");
 		}
 
-		$packet->decode(PacketSerializer::decoder($buffer, 0, $this->serializerContext));
+		try{
+			$packet->decode(PacketSerializer::decoder($buffer, 0, $this->serializerContext));
+		}catch(\Throwable $e){
+			$this->logger->logException($e);
+			return;
+		}
 
 		if($this->handler !== null){
 			$packet->handle($this->handler);
@@ -182,12 +186,12 @@ class NetworkSession{
 	}
 
 	public function sendDataPacket(ServerboundPacket $packet, bool $immediate = false) : void{
-		if(!$this->loggedIn && !$packet->canBeSentBeforeLogin()){
-			throw new \InvalidArgumentException("Attempted to send " . get_class($packet) . " too early");
-		}
+		// if(!$this->loggedIn && !$packet->canBeSentBeforeLogin()){
+		// 	throw new \InvalidArgumentException("Attempted to send " . get_class($packet) . " too early");
+		// }
 
 		$batch = PacketBatch::fromPackets($this->serializerContext, $packet);
-		$payload = $this->compressor->compress($batch->getBuffer());
+		$payload = $this->compressor?->compress($batch->getBuffer()) ?? $batch->getBuffer();
 
 		if($this->cipher !== null){
 			$payload = $this->cipher->encrypt($payload);
@@ -247,6 +251,7 @@ class NetworkSession{
 			"CapeImageWidth" => 0, //TODO: Hardcoded value
 			"CapeOnClassicSkin" => false, //TODO: Hardcoded value
 			"ClientRandomId" => $this->client->getId(),
+			"CompatibleWithClientSideChunkGen" => false, //TODO: Hardcoded value
 			"CurrentInputMode" => 2, //TODO: Hardcoded value
 			"DefaultInputMode" => 1, //TODO: Hardcoded value
 			"DeviceId" => $this->loginInfo->getDeviceId(),
@@ -254,7 +259,9 @@ class NetworkSession{
 			"DeviceOS" => $this->loginInfo->getDeviceOS(),
 			"GameVersion" => ProtocolInfo::MINECRAFT_VERSION_NETWORK,
 			"GuiScale" => 0, //TODO: Hardcoded value
+			"IsEditorMode" => false, //TODO: Hardcoded value
 			"LanguageCode" => $this->loginInfo->getLocale(),
+			"OverrideSkin" => true, //TODO: Hardcoded value
 			"PersonaPieces" => [], //TODO: Hardcoded value
 			"PersonaSkin" => false, //TODO: Hardcoded value
 			"PieceTintColors" => [], //TODO: Hardcoded value
@@ -275,9 +282,15 @@ class NetworkSession{
 			"SkinResourcePatch" => base64_encode(json_encode(["geometry" => ["default" => "geometry.humanoid.custom"]])),
 			"ThirdPartyName" => "", //TODO: Hardcoded value
 			"ThirdPartyNameOnly" => false, //TODO: Hardcoded value
+			"TrustedSkin" => true, //TODO: Hardcoded value
 			"UIProfile" => 1 //TODO: Hardcoded value
 		], $localPriv);
 
 		return [$chainDataJwt, $clientDataJwt];
+	}
+
+	public function setCompressor(?Compressor $compressor) : NetworkSession{
+		$this->compressor = $compressor;
+		return $this;
 	}
 }

@@ -1,8 +1,12 @@
 <?php
+declare(strict_types=1);
 
 namespace ipad54\BedrockEditionClient\network\raknet;
 
 use ipad54\BedrockEditionClient\network\NetworkSession;
+use pocketmine\network\mcpe\protocol\ProtocolInfo;
+use pocketmine\network\mcpe\protocol\RequestNetworkSettingsPacket;
+use raklib\client\ClientSocket;
 use raklib\generic\ReceiveReliabilityLayer;
 use raklib\generic\SendReliabilityLayer;
 use raklib\generic\Socket;
@@ -15,6 +19,7 @@ use raklib\protocol\ConnectionRequest;
 use raklib\protocol\ConnectionRequestAccepted;
 use raklib\protocol\Datagram;
 use raklib\protocol\EncapsulatedPacket;
+use raklib\protocol\IncompatibleProtocolVersion;
 use raklib\protocol\MessageIdentifiers;
 use raklib\protocol\NACK;
 use raklib\protocol\NewIncomingConnection;
@@ -27,16 +32,23 @@ use raklib\protocol\Packet;
 use raklib\protocol\PacketReliability;
 use raklib\protocol\PacketSerializer;
 use raklib\utils\InternetAddress;
+use function max;
+use function microtime;
+use function ord;
+use function substr;
+use function time;
 
 class RakNetConnection{ //
 
-	public const MAX_SPLIT_PART_COUNT = 128;
+	public const MAX_SPLIT_PART_COUNT = 192;
 	public const MAX_CONCURRENT_SPLIT_COUNT = 4;
 
 	public const STATE_CONNECTING = 0;
 	public const STATE_CONNECTED = 1;
 
 	public const MIN_MTU_SIZE = 400;
+
+	public const MCPE_RAKNET_PROTOCOL_VERSION = 11;
 
 	public const MCPE_RAKNET_PACKET_ID = "\xfe";
 
@@ -75,7 +87,7 @@ class RakNetConnection{ //
 		$this->lastUpdate = time();
 		$this->startTimeMS = (int) (microtime(true) * 1000);
 
-		$this->socket = new Socket(new InternetAddress("0.0.0.0", mt_rand(1, 65535), 4));
+		$this->socket = new ClientSocket($this->serverAddress);
 
 		$this->recvLayer = new ReceiveReliabilityLayer(
 			$this->logger,
@@ -98,7 +110,7 @@ class RakNetConnection{ //
 		);
 
 		$pk = new OpenConnectionRequest1();
-		$pk->protocol = 10;
+		$pk->protocol = self::MCPE_RAKNET_PROTOCOL_VERSION;
 		$pk->mtuSize = $this->mtuSize - 28;
 		$this->sendPacket($pk);
 
@@ -122,7 +134,7 @@ class RakNetConnection{ //
 	}
 
 	public function receivePacket() : void{
-		if(($buffer = $this->socket->readPacket($ip, $port)) !== null){
+		if(($buffer = $this->socket->readPacket()) !== null){
 			if($this->offline){
 				$pk = OfflinePacketPool::getInstance()->getPacketFromPool($buffer);
 				if($pk !== null){
@@ -160,16 +172,16 @@ class RakNetConnection{ //
 		}
 	}
 
-	public function handleOfflineMessage(OfflineMessage $pk) : void{
-		if($pk instanceof OpenConnectionReply1){
+	public function handleOfflineMessage(OfflineMessage $packet) : void{
+		if($packet instanceof OpenConnectionReply1){
 			$pk = new OpenConnectionRequest2();
 			$pk->clientID = $this->networkSession->getClient()->getId();
 			$pk->serverAddress = $this->serverAddress;
-			$pk->mtuSize = $this->mtuSize;
+			$pk->mtuSize = $this->mtuSize = ($this->mtuSize > $packet->mtuSize ? $packet->mtuSize : max($this->mtuSize, $packet->mtuSize));
 			$this->sendPacket($pk);
 
 			$this->logger->debug("Sending OpenConnectionRequest2");
-		}elseif($pk instanceof OpenConnectionReply2){
+		}elseif($packet instanceof OpenConnectionReply2){
 			$pk = new ConnectionRequest();
 			$pk->clientID = $this->networkSession->getClient()->getId();
 			$pk->sendPingTime = time() + 20;
@@ -178,6 +190,8 @@ class RakNetConnection{ //
 			$this->offline = false;
 
 			$this->logger->debug("Sending ConnectionRequest");
+		}elseif($packet instanceof IncompatibleProtocolVersion){
+			$this->logger->debug("Incompatible protocol, need $packet->protocolVersion");
 		}
 	}
 
@@ -196,7 +210,7 @@ class RakNetConnection{ //
 	public function sendPacket(Packet $packet) : void{
 		$out = new PacketSerializer();
 		$packet->encode($out);
-		$this->socket->writePacket($out->getBuffer(), $this->serverAddress->getIp(), $this->serverAddress->getPort());
+		$this->socket->writePacket($out->getBuffer());
 	}
 
 	private function sendPing() : void{
@@ -204,7 +218,7 @@ class RakNetConnection{ //
 	}
 
 	private function sendPong(int $sendPongTime) : void{
-		$this->queueConnectedPacket(ConnectedPong::create($sendPongTime, $this->getRakNetTimeMS()), PacketReliability::UNRELIABLE, true);
+		$this->queueConnectedPacket(ConnectedPong::create($sendPongTime, $this->getRakNetTimeMS()), PacketReliability::UNRELIABLE, 0, true);
 	}
 
 	public function sendEncapsulated(EncapsulatedPacket $packet, bool $immediate = false) : void{
@@ -212,7 +226,7 @@ class RakNetConnection{ //
 	}
 
 	public function sendRaw(string $payload) : void{
-		$this->socket->writePacket($payload, $this->serverAddress->getIp(), $this->serverAddress->getPort());
+		$this->socket->writePacket($payload);
 	}
 
 	private function handleEncapsulatedPacketRoute(EncapsulatedPacket $packet) : void{
@@ -228,7 +242,7 @@ class RakNetConnection{ //
 					$pk->sendPingTime = $pk->sendPongTime = 0;
 					$this->queueConnectedPacket($pk, PacketReliability::UNRELIABLE, 0);
 
-					$this->networkSession->processLogin();
+					$this->networkSession->sendDataPacket(RequestNetworkSettingsPacket::create(ProtocolInfo::CURRENT_PROTOCOL));
 
 					$this->sendPing();
 
@@ -236,10 +250,10 @@ class RakNetConnection{ //
 
 					$this->logger->debug("Connection accepted");
 				}
-			}elseif($id === ConnectedPong::$ID){
-				$pk = new ConnectedPong();
+			}elseif($id === ConnectedPing::$ID){
+				$pk = new ConnectedPing();
 				$pk->decode(new PacketSerializer($packet->buffer));
-				$this->sendPong($pk->sendPongTime);
+				$this->sendPong($pk->sendPingTime);
 			}
 		}elseif($this->state === self::STATE_CONNECTED){
 			$buffer = $packet->buffer;
