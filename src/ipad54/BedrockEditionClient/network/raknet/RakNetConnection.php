@@ -3,9 +3,13 @@ declare(strict_types=1);
 
 namespace ipad54\BedrockEditionClient\network\raknet;
 
+use ipad54\BedrockEditionClient\address\ServerAddress;
 use ipad54\BedrockEditionClient\network\NetworkSession;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\RequestNetworkSettingsPacket;
+use pocketmine\scheduler\ClosureTask;
+use pocketmine\scheduler\TaskScheduler;
+use pocketmine\scheduler\TaskSchedulerTest;
 use raklib\client\ClientSocket;
 use raklib\generic\ReceiveReliabilityLayer;
 use raklib\generic\SendReliabilityLayer;
@@ -31,6 +35,7 @@ use raklib\protocol\OpenConnectionRequest2;
 use raklib\protocol\Packet;
 use raklib\protocol\PacketReliability;
 use raklib\protocol\PacketSerializer;
+use raklib\protocol\UnconnectedPing;
 use raklib\utils\InternetAddress;
 use function max;
 use function microtime;
@@ -71,6 +76,7 @@ class RakNetConnection{ //
 	private int $state = self::STATE_CONNECTING;
 
 	private bool $offline = true;
+	private bool $send = true;
 
 	public function __construct(NetworkSession $networkSession, \Logger $logger, int $mtuSize){
 		if($mtuSize < self::MIN_MTU_SIZE){
@@ -108,14 +114,24 @@ class RakNetConnection{ //
 			function(int $identifierACK) : void{
 			}
 		);
-
+		$this->serverAddress = new InternetAddress(gethostbyname($this->serverAddress->getIp()), $this->serverAddress->getPort(), 4);
+		$this->ping();
 		$pk = new OpenConnectionRequest1();
 		$pk->protocol = self::MCPE_RAKNET_PROTOCOL_VERSION;
-		$pk->mtuSize = $this->mtuSize - 28;
+		$pk->mtuSize = $this->mtuSize;
 		$this->sendPacket($pk);
 
 		$this->logger->debug("Sending OpenConnectionRequest1");
 	}
+
+	public function ping(){
+		$ping = new UnconnectedPing();
+		$ping->sendPingTime = intdiv(hrtime(true), 1_000_000);
+		$ping->clientId = $this->networkSession->getClient()->getId();
+		$this->sendPacket($ping);
+
+	}
+
 
 	public function getRakNetTimeMS() : int{
 		return ((int) (microtime(true) * 1000)) - $this->startTimeMS;
@@ -124,10 +140,20 @@ class RakNetConnection{ //
 	public function update() : void{
 		$this->receivePacket();
 
+
+		if($this->send){
+			$pk = new OpenConnectionRequest2();
+			$pk->clientID = $this->networkSession->getClient()->getId();
+			$pk->serverAddress = $this->serverAddress;
+			$pk->mtuSize = $this->mtuSize;
+			$this->sendPacket($pk);
+			$this->send = false;
+			$this->logger->debug("Sending OpenConnectionRequest2");
+		}
+
 		$this->recvLayer->update();
 		$this->sendLayer->update();
-
-		if((time() - $this->lastUpdate) >= 7){
+		if((time() - $this->lastUpdate) >= 3){
 			$this->sendPing();
 			$this->lastUpdate = time();
 		}
@@ -174,13 +200,8 @@ class RakNetConnection{ //
 
 	public function handleOfflineMessage(OfflineMessage $packet) : void{
 		if($packet instanceof OpenConnectionReply1){
-			$pk = new OpenConnectionRequest2();
-			$pk->clientID = $this->networkSession->getClient()->getId();
-			$pk->serverAddress = $this->serverAddress;
-			$pk->mtuSize = $this->mtuSize = ($this->mtuSize > $packet->mtuSize ? $packet->mtuSize : max($this->mtuSize, $packet->mtuSize));
-			$this->sendPacket($pk);
-
-			$this->logger->debug("Sending OpenConnectionRequest2");
+			$this->mtuSize = ($this->mtuSize > $packet->mtuSize ? $packet->mtuSize : max($this->mtuSize, $packet->mtuSize - 28));
+			$this->logger->debug("New mtuSize " . $this->mtuSize);
 		}elseif($packet instanceof OpenConnectionReply2){
 			$pk = new ConnectionRequest();
 			$pk->clientID = $this->networkSession->getClient()->getId();
@@ -263,7 +284,7 @@ class RakNetConnection{ //
 				$this->networkSession->handleEncoded($buffer);
 			}
 		}else{
-			//$this->logger->notice("Received packet before connection: " . bin2hex($packet->buffer));
+			$this->logger->notice("Received packet before connection: " . bin2hex($packet->buffer));
 		}
 	}
 }

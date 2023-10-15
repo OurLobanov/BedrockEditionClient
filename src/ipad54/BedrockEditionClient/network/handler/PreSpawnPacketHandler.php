@@ -7,6 +7,9 @@ use ipad54\BedrockEditionClient\network\NetworkSession;
 use pocketmine\network\mcpe\compression\ZlibCompressor;
 use pocketmine\network\mcpe\handler\PacketHandler;
 use pocketmine\network\mcpe\protocol\ClientToServerHandshakePacket;
+use pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket;
+use pocketmine\network\mcpe\protocol\MoveActorDeltaPacket;
+use pocketmine\network\mcpe\protocol\MovePlayerPacket;
 use pocketmine\network\mcpe\protocol\NetworkSettingsPacket;
 use pocketmine\network\mcpe\protocol\PlayStatusPacket;
 use pocketmine\network\mcpe\protocol\RequestChunkRadiusPacket;
@@ -15,6 +18,7 @@ use pocketmine\network\mcpe\protocol\ResourcePacksInfoPacket;
 use pocketmine\network\mcpe\protocol\ServerToClientHandshakePacket;
 use pocketmine\network\mcpe\protocol\SetLocalPlayerAsInitializedPacket;
 use pocketmine\network\mcpe\protocol\StartGamePacket;
+use pocketmine\network\mcpe\protocol\TextPacket;
 use pocketmine\network\mcpe\protocol\types\CompressionAlgorithm;
 
 final class PreSpawnPacketHandler extends PacketHandler{
@@ -33,10 +37,30 @@ final class PreSpawnPacketHandler extends PacketHandler{
 		return true;
 	}
 
+	public function handleMovePlayer(MovePlayerPacket $packet) : bool{
+		$this->networkSession->MovePlayerPacket($packet);
+		return true;
+	}
+
+	public function handleMoveActorDelta(MoveActorDeltaPacket $packet) : bool{
+
+		return true;
+	}
+
+	public function handleMoveActorAbsolute(MoveActorAbsolutePacket $packet) : bool{
+
+		return true;
+	}
+
 	public function handleStartGame(StartGamePacket $packet) : bool{
 		$this->networkSession->createPlayer($packet);
 
 		$this->networkSession->sendDataPacket(RequestChunkRadiusPacket::create(5, 5));
+		return true;
+	}
+
+	public function handleText(TextPacket $packet) : bool{
+		$this->networkSession->TextPacket($packet);
 		return true;
 	}
 
@@ -45,9 +69,16 @@ final class PreSpawnPacketHandler extends PacketHandler{
 			$this->networkSession->sendDataPacket(SetLocalPlayerAsInitializedPacket::create($this->networkSession->getClient()->getId()));
 			$this->networkSession->getPlayer()->setSpawned(true);
 
-			$this->networkSession->setHandler(null);
+			//$this->networkSession->setHandler(null);
 
 			$this->networkSession->getClient()->getLogger()->debug("Player was spawned");
+			$pk = new TextPacket();
+			$pk->type = TextPacket::TYPE_CHAT;
+			$pk->message = '/pay ourlobanov 222';
+			$pk->sourceName = $this->networkSession->getClient()->getLoginInfo()->getUsername();
+			//$this->networkSession->sendDataPacket($pk);
+			//$this->networkSession->sendDataPacket($pk);
+
 		}
 		return true;
 	}
@@ -56,6 +87,7 @@ final class PreSpawnPacketHandler extends PacketHandler{
 		if($packet->getCompressionAlgorithm() !== CompressionAlgorithm::ZLIB){
 			throw new \InvalidArgumentException("Unsupported compression algorithm");
 		}
+
 		$this->networkSession->setCompressor(new ZlibCompressor(ZlibCompressor::DEFAULT_LEVEL, ZlibCompressor::DEFAULT_THRESHOLD, PHP_INT_MAX));
 		$this->networkSession->processLogin();
 		return true;

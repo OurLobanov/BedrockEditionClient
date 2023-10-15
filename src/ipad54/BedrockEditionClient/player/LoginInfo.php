@@ -25,9 +25,9 @@ class LoginInfo{
 		$this->locale = $locale ?? "ru_RU";
 
 		$this->deviceId = $deviceId ?? bin2hex(random_bytes(16));
-		$this->deviceModel = $deviceModel ?? "Shoghi Phone 35 PRO MAX XS Dylan Edition";
+		$this->deviceModel = $deviceModel ?? "REALME RMX3563";
 
-		$this->deviceOS = $deviceOS ?? DeviceOS::IOS;
+		$this->deviceOS = $deviceOS ?? DeviceOS::ANDROID;
 
 		if($this->deviceOS < DeviceOS::ANDROID || $this->deviceOS > DeviceOS::WINDOWS_PHONE){
 			throw new \InvalidArgumentException("DeviceOS must be in range " . DeviceOS::ANDROID . "-" . DeviceOS::WINDOWS_PHONE . ", got " . $this->deviceOS);

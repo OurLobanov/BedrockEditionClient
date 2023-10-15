@@ -4,11 +4,13 @@ declare(strict_types=1);
 namespace ipad54\BedrockEditionClient\player;
 
 use ipad54\BedrockEditionClient\network\NetworkSession;
+use pocketmine\entity\Location;
 use pocketmine\entity\Skin;
+use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\protocol\StartGamePacket;
 use Ramsey\Uuid\UuidInterface;
 
-class Player{
+class Player extends Location{
 
 	private NetworkSession $networkSession;
 	private LoginInfo $loginInfo;
@@ -22,7 +24,8 @@ class Player{
 
 	private bool $spawned = false;
 
-	public function __construct(NetworkSession $networkSession, LoginInfo $loginInfo, StartGamePacket $startGamePacket, int $id){
+	public function __construct(NetworkSession $networkSession, LoginInfo $loginInfo, StartGamePacket $startGamePacket, int $id, Location $vector3){
+		parent::__construct($vector3->x, $vector3->y, $vector3->z, null, $vector3->yaw, $vector3->pitch);
 		$this->networkSession = $networkSession;
 		$this->loginInfo = $loginInfo;
 		$this->uuid = $loginInfo->getUuid();
