@@ -1,7 +1,7 @@
 # BedrockEditionClient
 Implementation of Minecraft: Bedrock Edition Client based on [PocketMine-MP](https://github.com/pmmp/PocketMine-MP) with Encryption
 
-Current Minecraft version: 1.19.10
+Current Minecraft version: 1.20.30
 
 ### TODO
 - [ ] Xbox Live Authentication

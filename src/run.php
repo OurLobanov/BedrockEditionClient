@@ -21,10 +21,9 @@ $clients =[];
 
 
 while (true) {
-	if($i++ < 2){
+	if($i++ < 1){
 		$login = new LoginInfo('ourlf' . rand(1111, 32224));
-		//$client = new Client(new InternetAddress('127.0.0.1', 19132, 4), $login, true);
-		$client = new Client(new InternetAddress('phoenix-pe.ru', 19132, 4), $login, true);
+		$client = new Client(new InternetAddress('127.0.0.1', 19132, 4), $login, true);
 		$time =time();
 		$client->handleDataPacket(function(Packet $packet) use($client, &$time) : void{
 			var_dump($packet->getName());
