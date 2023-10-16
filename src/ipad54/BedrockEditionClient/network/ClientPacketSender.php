@@ -23,6 +23,7 @@ class ClientPacketSender implements PacketSender{
 	}
 
 	public function close(string $reason = "unknown reason") : void{
-		// TODO: Implement close() method.
+
+		$this->connection->close();
 	}
 }

@@ -7,10 +7,13 @@ use ipad54\BedrockEditionClient\network\NetworkSession;
 use pocketmine\entity\Location;
 use pocketmine\entity\Skin;
 use pocketmine\math\Vector3;
+use pocketmine\network\mcpe\protocol\PlayerAuthInputPacket;
 use pocketmine\network\mcpe\protocol\StartGamePacket;
+use pocketmine\network\mcpe\protocol\types\PlayMode;
+use pocketmine\world\Position;
 use Ramsey\Uuid\UuidInterface;
 
-class Player extends Location{
+class Player{
 
 	private NetworkSession $networkSession;
 	private LoginInfo $loginInfo;
@@ -24,8 +27,7 @@ class Player extends Location{
 
 	private bool $spawned = false;
 
-	public function __construct(NetworkSession $networkSession, LoginInfo $loginInfo, StartGamePacket $startGamePacket, int $id, Location $vector3){
-		parent::__construct($vector3->x, $vector3->y, $vector3->z, null, $vector3->yaw, $vector3->pitch);
+	public function __construct(NetworkSession $networkSession, LoginInfo $loginInfo, StartGamePacket $startGamePacket, int $id, public Location $location){
 		$this->networkSession = $networkSession;
 		$this->loginInfo = $loginInfo;
 		$this->uuid = $loginInfo->getUuid();
@@ -40,6 +42,33 @@ class Player extends Location{
 
 	public function getLoginInfo() : LoginInfo{
 		return $this->loginInfo;
+	}
+
+	function sendPlayerPosition(Location $location) {
+		$this->location = $location;
+		$pk = PlayerAuthInputPacket::create(
+			position: $location,
+			pitch: $location->getPitch(),
+			yaw: $location->getYaw(),
+			headYaw: $location->getYaw(),
+			moveVecX: 0,
+			moveVecZ: 0,
+			inputFlags: 0,
+			inputMode: 1,
+			playMode: 2,
+			interactionMode: 0,
+			vrGazeDirection: null,
+			tick: 1,
+			delta: new Vector3(0, 0, 0),
+			itemInteractionData: null,
+			itemStackRequest: null,
+			blockActions: [],
+			analogMoveVecX: 0.0,
+			analogMoveVecZ: 0.0
+		);
+
+		$this->getNetworkSession()->sendDataPacket($pk);
+
 	}
 
 	public function getNetworkSession() : NetworkSession{

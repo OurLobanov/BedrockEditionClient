@@ -10,6 +10,7 @@ use pocketmine\network\mcpe\protocol\RequestNetworkSettingsPacket;
 use pocketmine\scheduler\ClosureTask;
 use pocketmine\scheduler\TaskScheduler;
 use pocketmine\scheduler\TaskSchedulerTest;
+use pocketmine\utils\Binary;
 use raklib\client\ClientSocket;
 use raklib\generic\ReceiveReliabilityLayer;
 use raklib\generic\SendReliabilityLayer;
@@ -22,6 +23,7 @@ use raklib\protocol\ConnectedPong;
 use raklib\protocol\ConnectionRequest;
 use raklib\protocol\ConnectionRequestAccepted;
 use raklib\protocol\Datagram;
+use raklib\protocol\DisconnectionNotification;
 use raklib\protocol\EncapsulatedPacket;
 use raklib\protocol\IncompatibleProtocolVersion;
 use raklib\protocol\MessageIdentifiers;
@@ -153,7 +155,7 @@ class RakNetConnection{ //
 
 		$this->recvLayer->update();
 		$this->sendLayer->update();
-		if((time() - $this->lastUpdate) >= 3){
+		if((time() - $this->lastUpdate) >= 9){
 			$this->sendPing();
 			$this->lastUpdate = time();
 		}

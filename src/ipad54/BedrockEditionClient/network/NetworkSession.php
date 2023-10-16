@@ -21,6 +21,7 @@ use pocketmine\network\mcpe\protocol\LoginPacket;
 use pocketmine\network\mcpe\protocol\MovePlayerPacket;
 use pocketmine\network\mcpe\protocol\Packet;
 use pocketmine\network\mcpe\protocol\PacketPool;
+use pocketmine\network\mcpe\protocol\PlayerAuthInputPacket;
 use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\serializer\ItemTypeDictionary;
 use pocketmine\network\mcpe\protocol\serializer\PacketBatch;
@@ -134,18 +135,21 @@ class NetworkSession{
 		if($this->player !== null){
 			throw new \LogicException("Player is already created!");
 		}
-		$this->player = new Player($this, $this->loginInfo, $packet, $this->client->getId(), new Location($packet->playerPosition->x, $packet->playerPosition->y, $packet->playerPosition->z, null,$packet->yaw, $packet->pitch));
-		$pk = MovePlayerPacket::create($this->player->getId(), $this->player, 0, 3, 13, PlayMode::SCREEN, true, 0, 0, 0, 1);
-		$this->getClient()->getNetworkSession()->sendDataPacket($pk);
-		$this->logger->debug("Player was created, eid: ".$this->client->getId());
+		$this->player = new Player($this, $this->loginInfo, $packet, $packet->actorRuntimeId, new Location($packet->playerPosition->x, $packet->playerPosition->y, $packet->playerPosition->z, null,$packet->yaw, $packet->pitch));
+
+		$this->logger->info("Player was created, eid: ".$this->client->getId());
 	}
 
 	public function TextPacket(TextPacket $packet) : void{
-		$this->logger->info($packet->getName() . ' ' . $packet->message);
+		if($packet->type === TextPacket::TYPE_TRANSLATION or $packet->type === TextPacket::TYPE_RAW){
+			$this->logger->info((string) $packet->message);
+		}
+
+
 	}
 
 	public function MovePlayerPacket(MovePlayerPacket $packet) : void{
-		$this->logger->info($packet->actorRuntimeId);
+
 	}
 
 	public function startEncryption(string $handshakeJwt) : void{
@@ -227,7 +231,7 @@ class NetworkSession{
 
 		$this->loggedIn = true;
 
-		$this->logger->debug("LoginPacket was sent, nickname: ".$this->loginInfo->getUsername());
+		$this->logger->info("LoginPacket was sent, nickname: ".$this->loginInfo->getUsername());
 	}
 
 	protected function buildLoginData() : array{
