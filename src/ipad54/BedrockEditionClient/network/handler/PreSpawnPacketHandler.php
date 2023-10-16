@@ -64,7 +64,7 @@ final class PreSpawnPacketHandler extends PacketHandler{
 			$this->networkSession->sendDataPacket(SetLocalPlayerAsInitializedPacket::create($this->networkSession->getClient()->getId()));
 			$this->networkSession->getPlayer()->setSpawned(true);
 
-			//$this->networkSession->setHandler(null);
+			$this->networkSession->setHandler(new SpawnPacketHandler($this->networkSession));
 
 			$this->networkSession->getClient()->getLogger()->info("Player was spawned");
 			$pk = new InteractPacket();

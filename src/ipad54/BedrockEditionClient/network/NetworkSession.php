@@ -148,10 +148,6 @@ class NetworkSession{
 
 	}
 
-	public function MovePlayerPacket(MovePlayerPacket $packet) : void{
-
-	}
-
 	public function startEncryption(string $handshakeJwt) : void{
 		if($this->cipher !== null){
 			throw new \LogicException("Encryption is already started!");
@@ -204,6 +200,10 @@ class NetworkSession{
 			$handler($packet);
 		}
 
+	}
+
+	public function close(){
+		$this->sender->close();
 	}
 
 	public function sendDataPacket(ServerboundPacket $packet, bool $immediate = false) : void{
@@ -331,9 +331,9 @@ class NetworkSession{
 			"CompatibleWithClientSideChunkGen" => true, //TODO: Hardcoded value
 			"CurrentInputMode" => 1, //TODO: Hardcoded value
 			"DefaultInputMode" => 1, //TODO: Hardcoded value
-			"DeviceId" => '19bd753a-5328-3c64-9f47-3b360dacf95f', //$this->loginInfo->getDeviceId(),
-			"DeviceModel" => 'System Product Name System manufacturer', //$this->loginInfo->getDeviceModel(),
-			"DeviceOS" => 7, //$this->loginInfo->getDeviceOS(),
+			"DeviceId" => $this->loginInfo->getDeviceId(),
+			"DeviceModel" => $this->loginInfo->getDeviceModel(),
+			"DeviceOS" => $this->loginInfo->getDeviceOS(),
 			"GameVersion" => ProtocolInfo::MINECRAFT_VERSION_NETWORK,
 			"GuiScale" => 0, //TODO: Hardcoded value
 			"IsEditorMode" => false, //TODO: Hardcoded value

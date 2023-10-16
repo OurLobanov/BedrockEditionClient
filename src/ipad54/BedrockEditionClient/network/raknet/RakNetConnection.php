@@ -15,6 +15,7 @@ use raklib\client\ClientSocket;
 use raklib\generic\ReceiveReliabilityLayer;
 use raklib\generic\SendReliabilityLayer;
 use raklib\generic\Socket;
+use raklib\generic\SocketException;
 use raklib\protocol\ACK;
 use raklib\protocol\AcknowledgePacket;
 use raklib\protocol\ConnectedPacket;
@@ -96,6 +97,7 @@ class RakNetConnection{ //
 		$this->startTimeMS = (int) (microtime(true) * 1000);
 
 		$this->socket = new ClientSocket($this->serverAddress);
+		$this->socket->setRecvTimeout(5, 0);
 
 		$this->recvLayer = new ReceiveReliabilityLayer(
 			$this->logger,
@@ -126,6 +128,10 @@ class RakNetConnection{ //
 		$this->logger->debug("Sending OpenConnectionRequest1");
 	}
 
+	public function  close(){
+		$this->socket->close();
+	}
+
 	public function ping(){
 		$ping = new UnconnectedPing();
 		$ping->sendPingTime = intdiv(hrtime(true), 1_000_000);
@@ -150,43 +156,48 @@ class RakNetConnection{ //
 			$pk->mtuSize = $this->mtuSize;
 			$this->sendPacket($pk);
 			$this->send = false;
-			$this->logger->debug("Sending OpenConnectionRequest2");
+			$this->logger->info("Sending OpenConnectionRequest2");
 		}
 
 		$this->recvLayer->update();
 		$this->sendLayer->update();
-		if((time() - $this->lastUpdate) >= 9){
+		if((time() - $this->lastUpdate) >= 1){
 			$this->sendPing();
 			$this->lastUpdate = time();
 		}
 	}
 
 	public function receivePacket() : void{
-		if(($buffer = $this->socket->readPacket()) !== null){
-			if($this->offline){
-				$pk = OfflinePacketPool::getInstance()->getPacketFromPool($buffer);
-				if($pk !== null){
-					$reader = new PacketSerializer($buffer);
-					$pk->decode($reader);
+		try{
 
-					if($pk->isValid()){
-						$this->handleOfflineMessage($pk);
+			if(($buffer = $this->socket->readPacket()) !== null){
+				if($this->offline){
+					$pk = OfflinePacketPool::getInstance()->getPacketFromPool($buffer);
+					if($pk !== null){
+						$reader = new PacketSerializer($buffer);
+						$pk->decode($reader);
+
+						if($pk->isValid()){
+							$this->handleOfflineMessage($pk);
+						}
 					}
-				}
-			}else{
-				$header = ord($buffer[0]);
-				if(($header & Datagram::BITFLAG_VALID) !== 0){
-					if(($header & Datagram::BITFLAG_ACK) !== 0){
-						$packet = new ACK();
-					}elseif(($header & Datagram::BITFLAG_NAK) !== 0){
-						$packet = new NACK();
-					}else{
-						$packet = new Datagram();
+				}else{
+					$header = ord($buffer[0]);
+					if(($header & Datagram::BITFLAG_VALID) !== 0){
+						if(($header & Datagram::BITFLAG_ACK) !== 0){
+							$packet = new ACK();
+						}elseif(($header & Datagram::BITFLAG_NAK) !== 0){
+							$packet = new NACK();
+						}else{
+							$packet = new Datagram();
+						}
+						$packet->decode(new PacketSerializer($buffer));
+						$this->handlePacket($packet);
 					}
-					$packet->decode(new PacketSerializer($buffer));
-					$this->handlePacket($packet);
 				}
 			}
+		} catch (SocketException $e) {
+			$this->logger->info('Caught exception: '.  $e->getMessage());
 		}
 	}
 
