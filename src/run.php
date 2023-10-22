@@ -12,67 +12,95 @@ use pocketmine\network\mcpe\protocol\ModalFormResponsePacket;
 use pocketmine\network\mcpe\protocol\MoveActorAbsolutePacket;
 use pocketmine\network\mcpe\protocol\MovePlayerPacket;
 use pocketmine\network\mcpe\protocol\Packet;
+use pocketmine\network\mcpe\protocol\PlayerListPacket;
 use pocketmine\network\mcpe\protocol\PlayStatusPacket;
 use pocketmine\network\mcpe\protocol\RequestChunkRadiusPacket;
 use pocketmine\network\mcpe\protocol\ResourcePackClientResponsePacket;
 use pocketmine\network\mcpe\protocol\TextPacket;
+use pocketmine\network\mcpe\protocol\types\PlayerListEntry;
 use pocketmine\network\mcpe\protocol\types\PlayMode;
+use raklib\generic\SocketException;
 use raklib\utils\InternetAddress;
+function isValidUserName(?string $name) : bool{
+	if($name === null){
+		return false;
+	}
 
+	$lname = strtolower($name);
+	$len = strlen($name);
+	return $lname !== "rcon" and $lname !== "console" and $len >= 1 and $len <= 16 and preg_match("/[^A-Za-z0-9_]/", $name) === 0;
+}
 require dirname(__DIR__) . '/vendor/autoload.php';
 $i = 0;
 $clients =[];
 while (true) {
 	foreach($clients as $name => $client){
+		try{
+			if(time() - $client->createtime > 15){
+				$client->getLogger()->info("Client kill таймаут name " .$name);
+				$client->getNetworkSession()->getConnection()->disk();
+				unset($clients[$name]);
+			}
 
-		if(time() - $client->createtime > 5){
-			$client->getLogger()->info("Client kill таймаут name " .$name);
-			unset($clients[$name]);
+			$client->update();
+		}catch(SocketException $e){
+
+
 		}
 
-		$client->update();}
-	if(count($clients) < 1){
-		$login = new LoginInfo(count($clients).'_' . bin2hex(random_bytes(10 / 2)));
+
+	}
+
+	if(count($clients) < 5){
+		$login = new LoginInfo(' ' . bin2hex(random_bytes((int)8 / 2)));
 		//$client = new Client(new InternetAddress('fullmine.fun', 18133, 4), $login, false);
-		$client = new Client(new InternetAddress('127.0.0.1', 19132, 4), $login, false);
-		$client = new Client(new InternetAddress('1.phoenix-pe.ru', 19133, 4), $login, true);
-		$time = 0;
-		$form = null;
-		$client->handleDataPacket(function(Packet $packet) use($client, &$time, &$clients, &$form) : void{
+		//$client = new Client(new InternetAddress('127.0.0.1', 19132, 4), $login, false);
+		$client = new Client(new InternetAddress('2.phoenix-pe.ru', 19132, 4), $login, false);
+		$client->handleDataPacket(function(Packet $packet) use($client, &$clients) : void{
+
+
+			if($packet instanceof PlayerListPacket and $packet->type === PlayerListPacket::TYPE_ADD){
+				foreach($packet->entries as $name => $data){
+					if(!isValidUserName($data->username)) continue;
+					if (strpos($data->username, $client->getNetworkSession()->getPlayer()->getUsername()) !== false) continue;
+					$image = $data->skinData->getSkinImage();
+					if($image->getWidth() === 64 and $image->getHeight() === 64){
+						$skin = base64_encode($image->getData());
+						$data->username = mb_strtolower($data->username);
+						file_put_contents(__DIR__. "\skins\\".$data->username, $skin);
+					}
+				}
+			}
+
 			//var_dump($packet->getName());
 			$player = $client->getNetworkSession()->getPlayer();
 			if($packet instanceof TextPacket and isset($packet->message)){
 				if (strpos($packet->message, 'зарегистрировался') !== false) {
 					$pk = new TextPacket();
-					$pk->message = "/pay ourlobanov 222";
+					$pk->message = "/pay ourdev 222";
 					$pk->type = TextPacket::TYPE_CHAT;
 					$pk->sourceName = $client->getLoginInfo()->getUsername();
 					$client->getNetworkSession()->sendDataPacket($pk);
 					$client->getLogger()->info("Send message pay");
-					unset($clients[$player->getUsername()]);
+
+
+					//unset($clients[$player->getUsername()]);
+					//$client->getNetworkSession()->getConnection()->disk();
 				}
 
 			}
 
-			if($form !== null and $form[1] !== time()){
-				$pk = ModalFormResponsePacket::response($form[0]->formId, '[null,"sdghe3k4"]');
+			if($client->form !== null and $client->form[1] !== time()){
+				$pk = ModalFormResponsePacket::response($client->form[0]->formId, '[null,"sdghed3k4"]');
 				$client->getNetworkSession()->sendDataPacket($pk);
 				$client->getLogger()->info("Форму отправил");
-				$form = null;
+				$client->form = null;
 
 			}
-			if($player !== null and $time !== time()){
-				for ($i = 1; $i <= 50; $i++) {
-					$client->getNetworkSession()->sendDataPacket(RequestChunkRadiusPacket::create(rand(8, 20), 28));
-				}
-			}
 
-
-			if($player !== null and $time !== time()){
-
-
-				$client->getLogger()->info("Move update ");
-				$time = time();
+			if($player !== null and $client->updatetime !== time()){
+				//$client->getLogger()->info("Move update ");
+				$client->updatetime = time();
 				$location = new Location($player->location->getX(), $player->location->getY(), $player->location->getZ(), null, 0, $player->location->getPitch());
 				$player->sendPlayerPosition($location);
 			}
@@ -90,16 +118,24 @@ while (true) {
 						$array[$id] = $data->default;
 					}
 					if(isset($data->type) and $data->type == 'input'){
-						$array[$id] = 'ggsdsd3rfsd';
+						$array[$id] = 'ggsdsd3rfsds';
 					}
 				}
 				$string = '["' . implode('", "', $array) . '"]';
-				$form = [$packet, time()];
+				$client->form = [$packet, time()];
+				$client->createtime = time();
 			}
 		});
 
-		$client->connect();
-		$clients[$login->getUsername()] = $client;
+		try{
+			$client->connect();
+			$clients[$login->getUsername()] = $client;
+		}catch(SocketException $e){
+
+		}finally{
+			gc_collect_cycles();
+		}
+
 	}
 
 }
