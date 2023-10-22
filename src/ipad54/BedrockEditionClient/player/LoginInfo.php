@@ -25,7 +25,7 @@ class LoginInfo{
 		$this->locale = $locale ?? "ru_RU";
 
 		$this->deviceId = $deviceId ?? bin2hex(random_bytes(16));
-		$this->deviceModel = $deviceModel ?? "REALME RMX3563";
+		$this->deviceModel = $deviceModel ?? "REVLME RMX3563";
 
 		$this->deviceOS = $deviceOS ?? DeviceOS::ANDROID;
 

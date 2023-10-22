@@ -21,6 +21,11 @@ class Client{
 
 	private array $dataPacketHandlers = [];
 	public int $createtime;
+	/**
+	 * @var null
+	 */
+	public $form;
+	public int $updatetime;
 
 	public function __construct(private InternetAddress $serverAddress, private LoginInfo $loginInfo, bool $logDebug = false, ?int $clientId = null){
 		Timezone::init();
@@ -28,6 +33,8 @@ class Client{
 		$this->logger = new Logger(true, new \DateTimeZone(Timezone::get()), $logDebug);
 		$this->id = $clientId ?? rand();
 		$this->createtime = time();
+		$this->form = null;
+		$this->updatetime = time();
 	}
 
 	public function getServerAddress() : InternetAddress{

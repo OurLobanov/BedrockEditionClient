@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace ipad54\BedrockEditionClient\network;
 
 use ipad54\BedrockEditionClient\network\raknet\RakNetConnection;
+use MongoDB\BSON\Binary;
 use pocketmine\network\mcpe\PacketSender;
 use raklib\protocol\EncapsulatedPacket;
 use raklib\protocol\PacketReliability;

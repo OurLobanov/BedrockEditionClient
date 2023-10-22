@@ -97,7 +97,7 @@ class RakNetConnection{ //
 		$this->startTimeMS = (int) (microtime(true) * 1000);
 
 		$this->socket = new ClientSocket($this->serverAddress);
-		$this->socket->setRecvTimeout(5, 0);
+		$this->socket->setRecvTimeout(2);
 
 		$this->recvLayer = new ReceiveReliabilityLayer(
 			$this->logger,
@@ -165,6 +165,11 @@ class RakNetConnection{ //
 			$this->sendPing();
 			$this->lastUpdate = time();
 		}
+	}
+
+	public function disk(){
+		$pk = new DisconnectionNotification();
+		$this->queueConnectedPacket($pk, PacketReliability::RELIABLE_ORDERED, 0);
 	}
 
 	public function receivePacket() : void{
